@@ -1,0 +1,201 @@
+// src/screens/NumberSelectionScreen.js
+import React, { useState } from "react";
+import { View, Text, FlatList, StyleSheet, ActivityIndicator } from "react-native";
+import { useAuth } from "../context/AuthContext";
+import { useAppTheme } from "../context/AppContext";
+import { searchAvailableNumbers, provisionNumber } from "../api/telnyx";
+import { saveProvisionedNumber } from "../api/supabase";
+import { spacing, radius, typography } from "../constants/theme";
+import Header from "../components/Header";
+import Card from "../components/Card";
+import Input from "../components/Input";
+import Button from "../components/Button";
+import PaymentModal from "../payment/PaymentModal";
+import { formatPhoneNumber } from "../utils/formatters";
+
+const NUMBER_PRICE_PLAN = {
+  id: "single_number",
+  name: "New Virtual Number",
+  description: "One-time activation",
+  priceLabel: "$1.00",
+};
+
+export default function NumberSelectionScreen({ navigation }) {
+  const { user } = useAuth();
+  const { colors, numbers, setNumbers, setActiveNumber } = useAppTheme();
+
+  const [countryCode, setCountryCode] = useState("US");
+  const [areaCode, setAreaCode] = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [provisioning, setProvisioning] = useState(null); // phoneNumber currently being purchased
+  const [error, setError] = useState("");
+  const [checkoutNumber, setCheckoutNumber] = useState(null);
+
+  async function handleSearch() {
+    setError("");
+    setSearching(true);
+    try {
+      const found = await searchAvailableNumbers({ countryCode, areaCode });
+      setResults(found);
+    } catch (e) {
+      setError(e.message || "Could not search numbers.");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function handleChooseNumber(item) {
+    setCheckoutNumber(item);
+  }
+
+  async function handleConfirmPurchase() {
+    if (!checkoutNumber) return;
+    setProvisioning(checkoutNumber.phoneNumber);
+    setError("");
+    try {
+      const purchased = await provisionNumber(checkoutNumber.phoneNumber);
+      const saved = await saveProvisionedNumber({
+        userId: user.id,
+        phoneNumber: purchased.phoneNumber,
+        telnyxNumberId: purchased.telnyxNumberId,
+        countryCode,
+        smsEnabled: checkoutNumber.features.includes("sms"),
+        voiceEnabled: checkoutNumber.features.includes("voice"),
+      });
+      setNumbers([saved, ...numbers]);
+      setActiveNumber(saved);
+      setCheckoutNumber(null);
+      navigation.goBack();
+    } catch (e) {
+      setError(e.message || "Could not complete purchase.");
+    } finally {
+      setProvisioning(null);
+    }
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <Header title="Get a Number" onBack={() => navigation.goBack()} />
+
+      <View style={styles.searchRow}>
+        <Input
+          label="Country Code"
+          value={countryCode}
+          onChangeText={(t) => setCountryCode(t.toUpperCase())}
+          placeholder="US"
+          style={{ flex: 1, marginRight: spacing.sm }}
+          autoCapitalize="characters"
+        />
+        <Input
+          label="Area Code"
+          value={areaCode}
+          onChangeText={setAreaCode}
+          placeholder="415"
+          keyboardType="number-pad"
+          style={{ flex: 1, marginLeft: spacing.sm }}
+        />
+      </View>
+
+      <View style={styles.searchButtonWrap}>
+        <Button label="Search Numbers" onPress={handleSearch} loading={searching} />
+      </View>
+
+      {error ? (
+        <Text
+          style={[
+            typography.caption,
+            { color: colors.danger, paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
+          ]}
+        >
+          {error}
+        </Text>
+      ) : null}
+
+      <FlatList
+        data={results}
+        keyExtractor={(item) => item.phoneNumber}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          !searching ? (
+            <Text
+              style={[
+                typography.body,
+                { color: colors.textMuted, textAlign: "center", marginTop: spacing.xl },
+              ]}
+            >
+              Search for available numbers by country and area code.
+            </Text>
+          ) : null
+        }
+        renderItem={({ item }) => (
+          <Card>
+            <View style={styles.resultRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>
+                  {formatPhoneNumber(item.phoneNumber)}
+                </Text>
+                <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>
+                  {item.region || countryCode} · {item.features.join(", ")}
+                </Text>
+              </View>
+              <View style={styles.tagsRow}>
+                {item.features.map((f) => (
+                  <View key={f} style={[styles.tag, { backgroundColor: colors.surfaceAlt }]}>
+                    <Text style={[typography.tiny, { color: colors.textSecondary }]}>
+                      {f.toUpperCase()}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              <Button
+                label={provisioning === item.phoneNumber ? "" : "Select"}
+                loading={provisioning === item.phoneNumber}
+                onPress={() => handleChooseNumber(item)}
+                style={{ marginLeft: spacing.sm, paddingHorizontal: spacing.md }}
+              />
+            </View>
+          </Card>
+        )}
+      />
+
+      <PaymentModal
+        visible={!!checkoutNumber}
+        plan={{
+          ...NUMBER_PRICE_PLAN,
+          description: checkoutNumber ? formatPhoneNumber(checkoutNumber.phoneNumber) : "",
+        }}
+        onClose={() => setCheckoutNumber(null)}
+        onSuccess={handleConfirmPurchase}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  searchRow: {
+    flexDirection: "row",
+    paddingHorizontal: spacing.lg,
+  },
+  searchButtonWrap: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  listContent: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  resultRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  tagsRow: {
+    flexDirection: "row",
+  },
+  tag: {
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    marginLeft: spacing.xs,
+  },
+});

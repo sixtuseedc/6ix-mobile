@@ -1,0 +1,156 @@
+// src/screens/AuthScreen.js
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Pressable,
+} from "react-native";
+import { useAuth } from "../context/AuthContext";
+import { useAppTheme } from "../context/AppContext";
+import { spacing, typography } from "../constants/theme";
+import Input from "../components/Input";
+import Button from "../components/Button";
+
+export default function AuthScreen() {
+  const { signIn, signUp } = useAuth();
+  const { colors } = useAppTheme();
+
+  const [mode, setMode] = useState("signIn"); // "signIn" | "signUp"
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit() {
+    setError("");
+    if (!email || !password) {
+      setError("Enter your email and password.");
+      return;
+    }
+    setLoading(true);
+    try {
+      if (mode === "signIn") {
+        await signIn(email.trim(), password);
+      } else {
+        await signUp(email.trim(), password);
+      }
+    } catch (e) {
+      setError(e.message || "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.brand}>
+          <Text style={[typography.h1, { color: colors.textPrimary }]}>6ix</Text>
+          <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.xs }]}>
+            Virtual numbers. Real conversations.
+          </Text>
+        </View>
+
+        <View style={styles.form}>
+          <Input
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            keyboardType="email-address"
+          />
+          <Input
+            label="Password"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="••••••••"
+            secureTextEntry
+          />
+
+          {error ? (
+            <Text style={[typography.caption, { color: colors.danger, marginBottom: spacing.md }]}>
+              {error}
+            </Text>
+          ) : null}
+
+          <Button
+            label={mode === "signIn" ? "Sign In" : "Create Account"}
+            onPress={handleSubmit}
+            loading={loading}
+          />
+
+          <Pressable
+            onPress={() => setMode(mode === "signIn" ? "signUp" : "signIn")}
+            style={{ marginTop: spacing.md, alignItems: "center" }}
+          >
+            <Text style={[typography.body, { color: colors.accent }]}>
+              {mode === "signIn"
+                ? "New here? Create an account"
+                : "Already have an account? Sign in"}
+            </Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.divider}>
+          <View style={[styles.line, { backgroundColor: colors.border }]} />
+          <Text style={[typography.caption, { color: colors.textMuted, marginHorizontal: spacing.sm }]}>
+            or continue with
+          </Text>
+          <View style={[styles.line, { backgroundColor: colors.border }]} />
+        </View>
+
+        <View style={styles.socialRow}>
+          <Button
+            label="Apple"
+            variant="secondary"
+            style={{ flex: 1, marginRight: spacing.sm }}
+            onPress={() => setError("Apple sign-in isn't configured yet.")}
+          />
+          <Button
+            label="Google"
+            variant="secondary"
+            style={{ flex: 1, marginLeft: spacing.sm }}
+            onPress={() => setError("Google sign-in isn't configured yet.")}
+          />
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  scroll: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: spacing.lg,
+  },
+  brand: {
+    marginBottom: spacing.xl,
+    alignItems: "flex-start",
+  },
+  form: {
+    marginBottom: spacing.lg,
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: spacing.lg,
+  },
+  line: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+  },
+  socialRow: {
+    flexDirection: "row",
+  },
+});

@@ -1,0 +1,144 @@
+-- supabase/schema.sql
+-- Run this in the Supabase SQL editor to set up the tables 6ix Mobile
+-- expects. RLS policies assume auth.uid() matches profiles.id / the
+-- owning user_id column on each table.
+
+create extension if not exists "uuid-ossp";
+
+-- ------------------------------------------------------------------
+-- profiles
+-- ------------------------------------------------------------------
+create table if not exists profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text,
+  credits integer not null default 0,
+  active_number_id uuid,
+  created_at timestamptz not null default now()
+);
+
+alter table profiles enable row level security;
+
+create policy "Users can view their own profile"
+  on profiles for select using (auth.uid() = id);
+
+create policy "Users can update their own profile"
+  on profiles for update using (auth.uid() = id);
+
+create policy "Users can insert their own profile"
+  on profiles for insert with check (auth.uid() = id);
+
+-- ------------------------------------------------------------------
+-- numbers  (virtual phone numbers provisioned via Telnyx)
+-- ------------------------------------------------------------------
+create table if not exists numbers (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  phone_number text not null unique,
+  telnyx_number_id text,
+  country_code text,
+  sms_enabled boolean not null default true,
+  voice_enabled boolean not null default true,
+  status text not null default 'active',
+  created_at timestamptz not null default now()
+);
+
+alter table numbers enable row level security;
+
+create policy "Users can view their own numbers"
+  on numbers for select using (auth.uid() = user_id);
+
+create policy "Users can insert their own numbers"
+  on numbers for insert with check (auth.uid() = user_id);
+
+create policy "Users can update their own numbers"
+  on numbers for update using (auth.uid() = user_id);
+
+-- ------------------------------------------------------------------
+-- threads  (one per contact per virtual number)
+-- ------------------------------------------------------------------
+create table if not exists threads (
+  id uuid primary key default uuid_generate_v4(),
+  number_id uuid not null references numbers(id) on delete cascade,
+  contact_number text not null,
+  contact_name text,
+  last_message_at timestamptz default now(),
+  last_message_preview text,
+  unread_count integer not null default 0,
+  created_at timestamptz not null default now(),
+  unique (number_id, contact_number)
+);
+
+alter table threads enable row level security;
+
+create policy "Users can view threads on their numbers"
+  on threads for select using (
+    exists (select 1 from numbers n where n.id = threads.number_id and n.user_id = auth.uid())
+  );
+
+create policy "Users can update threads on their numbers"
+  on threads for update using (
+    exists (select 1 from numbers n where n.id = threads.number_id and n.user_id = auth.uid())
+  );
+
+-- Inserts to threads happen server-side (webhook, service role), so no
+-- insert policy is granted to authenticated users here.
+
+-- ------------------------------------------------------------------
+-- messages
+-- ------------------------------------------------------------------
+create table if not exists messages (
+  id uuid primary key default uuid_generate_v4(),
+  thread_id uuid not null references threads(id) on delete cascade,
+  number_id uuid not null references numbers(id) on delete cascade,
+  to_number text,
+  from_number text,
+  body text,
+  direction text not null check (direction in ('inbound', 'outbound')),
+  telnyx_message_id text,
+  status text not null default 'sent',
+  created_at timestamptz not null default now()
+);
+
+alter table messages enable row level security;
+
+create policy "Users can view messages on their numbers"
+  on messages for select using (
+    exists (select 1 from numbers n where n.id = messages.number_id and n.user_id = auth.uid())
+  );
+
+create policy "Users can insert outbound messages on their numbers"
+  on messages for insert with check (
+    direction = 'outbound'
+    and exists (select 1 from numbers n where n.id = messages.number_id and n.user_id = auth.uid())
+  );
+
+-- ------------------------------------------------------------------
+-- call_logs
+-- ------------------------------------------------------------------
+create table if not exists call_logs (
+  id uuid primary key default uuid_generate_v4(),
+  number_id uuid not null references numbers(id) on delete cascade,
+  to_number text,
+  direction text not null check (direction in ('inbound', 'outbound')),
+  status text not null default 'completed',
+  telnyx_call_control_id text,
+  duration_seconds integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table call_logs enable row level security;
+
+create policy "Users can view call logs on their numbers"
+  on call_logs for select using (
+    exists (select 1 from numbers n where n.id = call_logs.number_id and n.user_id = auth.uid())
+  );
+
+create policy "Users can insert call logs on their numbers"
+  on call_logs for insert with check (
+    exists (select 1 from numbers n where n.id = call_logs.number_id and n.user_id = auth.uid())
+  );
+
+-- ------------------------------------------------------------------
+-- Realtime: enable for messages so the app can subscribe to inbound texts
+-- ------------------------------------------------------------------
+alter publication supabase_realtime add table messages;
