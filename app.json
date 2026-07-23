@@ -2,8 +2,6 @@
   "expo": {
     "name": "6ix-mobile",
     "slug": "6ix-mobile",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "platforms": ["ios", "android", "web"]
+    "version": "1.0.0"
   }
 }
