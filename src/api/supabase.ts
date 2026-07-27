@@ -7,9 +7,25 @@ import { createClient } from "@supabase/supabase-js";
 import { CONFIG } from "../constants/config";
 import type { CallLog, Message, NumberRow, Profile, Thread } from "../types/models";
 
+// Safe storage adapter to prevent SSR/Node build crashes when `window` is missing
+const safeStorage = {
+  getItem: (key: string) => {
+    if (typeof window === "undefined") return Promise.resolve(null);
+    return AsyncStorage.getItem(key);
+  },
+  setItem: (key: string, value: string) => {
+    if (typeof window === "undefined") return Promise.resolve();
+    return AsyncStorage.setItem(key, value);
+  },
+  removeItem: (key: string) => {
+    if (typeof window === "undefined") return Promise.resolve();
+    return AsyncStorage.removeItem(key);
+  },
+};
+
 export const supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
   auth: {
-    storage: AsyncStorage,
+    storage: safeStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
