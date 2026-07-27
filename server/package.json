@@ -1,16 +1,6 @@
-{
-  "name": "6ix-webhooks",
-  "version": "1.0.0",
-  "private": true,
-  "description": "Render-hosted webhook receiver for Telnyx SMS/call status events.",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
-  "dependencies": {
+"dependencies": {
     "express": "^4.19.2",
-    "telnyx": "^2.19.0",
+    "telnyx": "latest",
     "@supabase/supabase-js": "^2.43.4",
     "dotenv": "^16.4.5"
   }
-}
