@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "express": "^4.19.2",
+    "telnyx": "^2.19.0",
     "@supabase/supabase-js": "^2.43.4",
     "dotenv": "^16.4.5"
   }
