@@ -1,34 +1,49 @@
 // src/api/supabase.ts
-// Supabase client + thin data-access helpers used by screens/context.
-
 import "react-native-url-polyfill/auto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { CONFIG } from "../constants/config";
 import type { CallLog, Message, NumberRow, Profile, Thread } from "../types/models";
 
-// Safe storage adapter to prevent SSR/Node build crashes when `window` is missing
-const safeStorage = {
-  getItem: (key: string) => {
-    if (typeof window === "undefined") return Promise.resolve(null);
-    return AsyncStorage.getItem(key);
-  },
-  setItem: (key: string, value: string) => {
-    if (typeof window === "undefined") return Promise.resolve();
-    return AsyncStorage.setItem(key, value);
-  },
-  removeItem: (key: string) => {
-    if (typeof window === "undefined") return Promise.resolve();
-    return AsyncStorage.removeItem(key);
-  },
+let cachedSupabase: SupabaseClient | null = null;
+
+export const getSupabase = () => {
+  if (cachedSupabase) return cachedSupabase;
+
+  const safeStorage = {
+    getItem: (key: string) => {
+      if (typeof window === "undefined") return Promise.resolve(null);
+      return AsyncStorage.getItem(key);
+    },
+    setItem: (key: string, value: string) => {
+      if (typeof window === "undefined") return Promise.resolve();
+      return AsyncStorage.setItem(key, value);
+    },
+    removeItem: (key: string) => {
+      if (typeof window === "undefined") return Promise.resolve();
+      return AsyncStorage.removeItem(key);
+    },
+  };
+
+  cachedSupabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
+    auth: {
+      storage: safeStorage,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+    },
+  });
+
+  return cachedSupabase;
 };
 
-export const supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
-  auth: {
-    storage: safeStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
+// Proxy export so existing function calls across your app don't break
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_, prop) {
+    const client = getSupabase();
+    // @ts-ignore
+    const value = client[prop];
+    return typeof value === "function" ? value.bind(client) : value;
   },
 });
 
@@ -199,15 +214,14 @@ export async function saveCallLog(params: {
     .select()
     .single();
   if (error) throw error;
-  return data as CallLog;
+  return data as Message as CallLog;
 }
 
 /* ---------------------------- Realtime helper ---------------------------- */
 
-// Subscribe to new inbound messages for a given number so MessagesScreen /
-// ChatCallScreen can update live without polling.
 export function subscribeToMessages(numberId: string, onInsert: (message: Message) => void) {
-  const channel = supabase
+  const client = getSupabase();
+  const channel = client
     .channel(`messages-number-${numberId}`)
     .on(
       "postgres_changes",
@@ -217,6 +231,6 @@ export function subscribeToMessages(numberId: string, onInsert: (message: Messag
     .subscribe();
 
   return () => {
-    supabase.removeChannel(channel);
+    client.removeChannel(channel);
   };
 }
