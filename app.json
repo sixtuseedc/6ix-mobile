@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "6ix Mobile",
+    "slug": "6ix-mobile",
+    "scheme": "sixmobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#0B0D10"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.sixix.mobile",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "6ix needs microphone access to make and receive calls.",
+        "NSContactsUsageDescription": "6ix can use your contacts to label incoming numbers."
+      }
+    },
+    "android": {
+      "package": "com.sixix.mobile",
+      "permissions": ["RECORD_AUDIO", "READ_CONTACTS"]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "extra": {
+      "eas": {
+        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+      }
+    }
+  }
+}
