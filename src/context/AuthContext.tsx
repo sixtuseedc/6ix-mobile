@@ -1,61 +1,33 @@
-// src/context/AuthContext.tsx
-// Wraps Supabase auth session state so screens just call useAuth().
-
 import React, { createContext, useContext, useEffect, useState } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import {
-  getSession,
-  onAuthStateChange,
-  signInWithEmail,
-  signUpWithEmail,
-  signOut as supabaseSignOut,
-} from "../api/supabase";
+import { createClient } from "@supabase/supabase-js";
 
-interface AuthContextValue {
-  session: Session | null;
-  user: User | null;
-  initializing: boolean;
-  signIn: typeof signInWithEmail;
-  signUp: typeof signUpWithEmail;
-  signOut: typeof supabaseSignOut;
-}
+const supabaseUrl = "YOUR_SUPABASE_URL";
+const supabaseAnonKey = "YOUR_SUPABASE_ANON_KEY";
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+const AuthContext = createContext<any>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [initializing, setInitializing] = useState(true);
+  const [session, setSession] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let unsub: { unsubscribe: () => void } | undefined;
-
-    getSession().then(({ data }) => {
-      setSession(data?.session ?? null);
-      setInitializing(false);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
     });
 
-    const { data: listener } = onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setLoading(false);
     });
-    unsub = listener?.subscription;
-
-    return () => unsub?.unsubscribe();
   }, []);
 
-  const value: AuthContextValue = {
-    session,
-    user: session?.user ?? null,
-    initializing,
-    signIn: signInWithEmail,
-    signUp: signUpWithEmail,
-    signOut: supabaseSignOut,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ session, loading, supabase }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
-}
+export const useAuth = () => useContext(AuthContext);
