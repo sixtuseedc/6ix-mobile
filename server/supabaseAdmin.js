@@ -3,11 +3,15 @@
 // key inside the mobile/web app — it bypasses row-level security.
 
 const { createClient } = require("@supabase/supabase-js");
+const WebSocket = require("ws");
 
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { persistSession: false } }
+  { 
+    auth: { persistSession: false },
+    realtime: { transport: WebSocket }
+  }
 );
 
-module.exports = { supabaseAdmin };
+module.exports = supabaseAdmin;
