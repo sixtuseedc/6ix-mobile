@@ -1,0 +1,1 @@
+const express = require("express"); const router = express.Router(); router.post("/initialize", async (req, res) = res.json({ success: true, message: "Secure payment initialized" }); }); module.exports = router; 
